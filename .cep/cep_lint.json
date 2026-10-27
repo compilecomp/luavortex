@@ -1,0 +1,415 @@
+{
+  "standard": {
+    "name": "CEP&CC",
+    "version": "0.1",
+    "doc": "../standard.md"
+  },
+  "tool": {
+    "name": "cep_lint",
+    "version": "0.1.0"
+  },
+  "scan": {
+    "extensions": [
+      ".cpp",
+      ".hpp"
+    ],
+    "exclude": [
+      "tools/cep_lint/tests/fixtures/",
+      "\\.git/",
+      "build/",
+      "third_party/",
+      "quarantine/",
+      "generated/"
+    ]
+  },
+  "cli": {
+    "usage": "cep_lint [options] <files or directories>",
+    "options": [
+      {
+        "long": "config",
+        "short": "c",
+        "value": true,
+        "help": "path to the lint configuration JSON (default: .cep/cep_lint.json, env CEP_LINT_CONFIG)"
+      },
+      {
+        "long": "self-test",
+        "short": "t",
+        "value": false,
+        "help": "run the self-test manifest and exit"
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "value": false,
+        "help": "show usage and exit"
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "value": false,
+        "help": "print tool and standard versions"
+      }
+    ]
+  },
+  "output": {
+    "issue": "{file}:{line}: {severity_name} [{rule}]: {message}",
+    "summary": "{files} files scanned, {issues} issues ({sev0} severity-0, {sev1} severity-1, {sev2} severity-2, {sev3} severity-3)",
+    "scenario": "[{status}] {name}: {issues} issues, expected {expected}",
+    "suite": "self-test: {passed}/{total} scenarios passed"
+  },
+  "exit_codes": {
+    "ok": 0,
+    "violations": 1,
+    "boot": 2,
+    "usage": 3
+  },
+  "severity_names": [
+    "SEV0-EXTERMINATE",
+    "SEV1-EXTERMINATE-UNLESS-WAIVED",
+    "SEV2-REJECT-AND-REPAIR",
+    "SEV3-WARN-AND-EDUCATE"
+  ],
+  "fail_on": [
+    0,
+    1
+  ],
+  "self_test": {
+    "manifest": "../tools/cep_lint/tests/manifest.json"
+  },
+  "rules": {
+    "CEP-LINT-FILE-HEADER": {
+      "check": "comment_block_schema",
+      "severity": 1,
+      "params": {
+        "mode": "file_header",
+        "max_start_line": 1,
+        "required_fields": [
+          "CEP:FILE",
+          "CEP:WHAT",
+          "CEP:WHY",
+          "CEP:CLASS",
+          "CEP:STATUS",
+          "CEP:FAILURE",
+          "CEP:ASSUMES",
+          "CEP:COST",
+          "CEP:EVIDENCE"
+        ],
+        "class_field": "CEP:CLASS",
+        "allowed_classes": [
+          "CEP-0",
+          "CEP-1",
+          "CEP-2",
+          "CC",
+          "FFI",
+          "HPC-0",
+          "HPC-1",
+          "HPC-2",
+          "RCS-0",
+          "RCS-1",
+          "RCS-2"
+        ]
+      },
+      "messages": {
+        "no_block": "file does not begin with a CEP header block (CEP&CC 35)",
+        "missing": "file header block is missing required fields: {missing} (CEP&CC 35, 10.2)",
+        "bad_class": "CEP:CLASS value '{match}' is not a defined CEP&CC class (CEP&CC 5, 38.3, 39.2)"
+      }
+    },
+    "CEP-LINT-FUNC-BLOCK": {
+      "check": "function_policy",
+      "severity": 1,
+      "params": {
+        "mode": "block",
+        "required_fields": [
+          "CEP:WHAT",
+          "CEP:WHY",
+          "CEP:STATUS",
+          "CEP:FAILURE",
+          "CEP:ASSUMES",
+          "CEP:COST",
+          "CEP:EVIDENCE"
+        ],
+        "min_body_statements": 2,
+        "gap_pattern": "^\\s*[^;{}()]*$",
+        "require_block_for_lambdas": false
+      },
+      "messages": {
+        "missing": "function '{match}' lacks a CEP comment block; missing fields: {missing} (CEP&CC 10.2)"
+      }
+    },
+    "CEP-LINT-STATUS-VALUE": {
+      "check": "comment_block_schema",
+      "severity": 2,
+      "params": {
+        "mode": "status_value",
+        "status_field": "CEP:STATUS",
+        "allowed_values": [
+          "complete",
+          "partial",
+          "stub",
+          "placeholder"
+        ]
+      },
+      "messages": {
+        "bad_value": "CEP:STATUS value '{match}' is not one of complete|partial|stub|placeholder (CEP&CC 10.5)"
+      }
+    },
+    "CEP-LINT-STUB-DECL": {
+      "check": "comment_block_schema",
+      "severity": 1,
+      "params": {
+        "mode": "stub_requirements",
+        "status_field": "CEP:STATUS",
+        "statuses": [
+          "stub",
+          "partial",
+          "placeholder"
+        ],
+        "required_fields": [
+          "CEP:OWNER",
+          "CEP:TICKET"
+        ]
+      },
+      "messages": {
+        "unowned": "status '{match}' requires CEP:OWNER and CEP:TICKET in the same block (CEP&CC 10.10)"
+      }
+    },
+    "CEP-LINT-TODO-OWNER": {
+      "check": "comment_regex",
+      "severity": 1,
+      "params": {
+        "pattern": "\\b(TODO|FIXME|XXX|HACK)\\b",
+        "icase": true,
+        "line_scoped": true,
+        "suppression_pattern": "CEP:TODO\\([^)]+\\):\\s*CEP-[0-9]+:"
+      },
+      "messages": {
+        "default": "unowned marker '{match}' (CEP&CC 10.10): write CEP:TODO(owner): CEP-<ticket>: text"
+      }
+    },
+    "CEP-LINT-COMMENTED-CODE": {
+      "check": "comment_regex",
+      "severity": 2,
+      "params": {
+        "pattern": "^\\s*(?:#\\s*(?:include|define|ifndef|endif|pragma|if|else|elif)\\b|(?:return|throw|break|continue|goto|else|try|catch|new|delete|auto|constexpr|const|static|namespace|using|template|struct|class|enum|typedef|extern|inline|virtual|explicit|friend|if|for|while|switch|co_await|co_return|co_yield)\\b.*[;{}]\\s*$|[A-Za-z_][\\w]*(?:\\([^\\n]*\\))?\\s*=[^=\\n].*;\\s*$)",
+        "icase": false,
+        "line_scoped": true,
+        "suppression_pattern": "CEP:"
+      },
+      "messages": {
+        "default": "commented-out code (CEP&CC 10.14): '{match}' \u2014 use version control"
+      }
+    },
+    "CEP-LINT-PLACEHOLDER-TEXT": {
+      "check": "string_literal_regex",
+      "severity": 1,
+      "params": {
+        "pattern": "\\b(?:not\\s+implemented|unimplemented|placeholder|fixme|tbd|wip|to\\s+do)\\b",
+        "icase": true
+      },
+      "messages": {
+        "default": "marker text in string literal: '{match}' (CEP&CC 3, 10.5) \u2014 implement the real behavior"
+      }
+    },
+    "CEP-LINT-PLACEHOLDER-COMMENT": {
+      "check": "comment_regex",
+      "severity": 1,
+      "params": {
+        "pattern": "\\b(?:not\\s+implemented|unimplemented|placeholder|fixme|tbd|wip)\\b",
+        "icase": true,
+        "line_scoped": true,
+        "suppression_pattern": "^\\s*CEP:"
+      },
+      "messages": {
+        "default": "marker text in comment: '{match}' (CEP&CC 3, 10.5) \u2014 finish the work or declare it with CEP:STATUS"
+      }
+    },
+    "CEP-LINT-MAGIC-NUMBER": {
+      "check": "numeric_literal_policy",
+      "severity": 2,
+      "params": {
+        "allowed_values": [
+          0,
+          1
+        ],
+        "exempt_contexts": [
+          "constexpr",
+          "\\benum\\b",
+          "\\bconst\\b",
+          "static_assert",
+          "^\\s*#"
+        ]
+      },
+      "messages": {
+        "default": "magic number '{match}' (CEP&CC 11.3, Law 7): name it as a kPascalCase constant, move it to target config, or enforce it with static_assert"
+      }
+    },
+    "CEP-LINT-MACRO-PREFIX": {
+      "check": "macro_prefix_policy",
+      "severity": 2,
+      "params": {
+        "name_pattern": "^CEP_[A-Z0-9_]+$",
+        "guard_pattern": "^[A-Z][A-Z0-9_]*_(H|HPP|HPP_)$"
+      },
+      "messages": {
+        "default": "macro '{match}' must be CEP_-prefixed or an include guard (CEP&CC 33.16, 8.4)"
+      }
+    },
+    "CEP-LINT-HOT-BANNED": {
+      "check": "banned_token_policy",
+      "severity": 0,
+      "params": {
+        "applies_to_classes": [
+          "CEP-0",
+          "HPC-0",
+          "RCS-0"
+        ],
+        "class_field": "CEP:CLASS",
+        "tokens": [
+          "\\bnew\\b",
+          "\\bdelete\\b",
+          "\\bthrow\\b",
+          "\\btry\\b",
+          "\\bcatch\\b",
+          "\\bdynamic_cast\\b",
+          "\\btypeid\\b",
+          "\\bvirtual\\b",
+          "\\bco_await\\b",
+          "\\bco_yield\\b",
+          "\\bco_return\\b",
+          "\\bstd::function\\b",
+          "\\bstd::any\\b",
+          "\\bstd::shared_ptr\\b",
+          "\\bstd::weak_ptr\\b",
+          "\\bstd::bind\\b",
+          "\\bstd::regex\\b",
+          "\\bstd::format\\b",
+          "\\bstd::print\\b",
+          "\\bstd::println\\b",
+          "\\bstd::cout\\b",
+          "\\bstd::cerr\\b",
+          "\\bstd::cin\\b",
+          "\\bstd::istream\\b",
+          "\\bstd::ostream\\b",
+          "\\bstd::fstream\\b",
+          "\\bstd::filesystem\\b",
+          "\\bstd::mutex\\b",
+          "\\bstd::lock_guard\\b",
+          "\\bstd::unique_lock\\b",
+          "\\bstd::scoped_lock\\b",
+          "\\bstd::shared_lock\\b",
+          "\\bstd::thread\\b",
+          "\\bstd::jthread\\b",
+          "\\bstd::this_thread\\b",
+          "\\bstd::condition_variable\\b",
+          "\\bstd::async\\b",
+          "\\bstd::sort\\b",
+          "\\bstd::stable_sort\\b",
+          "\\bprintf\\b",
+          "\\bfprintf\\b",
+          "\\bsnprintf\\b",
+          "\\bfopen\\b",
+          "\\bmalloc\\b",
+          "\\bcalloc\\b",
+          "\\brealloc\\b",
+          "\\bfree\\b",
+          "\\bstd::vector\\b",
+          "\\bstd::string\\b",
+          "\\bstd::list\\b",
+          "\\bstd::map\\b",
+          "\\bstd::set\\b",
+          "\\bstd::unordered_map\\b",
+          "\\bstd::unordered_set\\b"
+        ]
+      },
+      "messages": {
+        "default": "token '{match}' is banned in {class} hot code (CEP&CC 5.1, 8.25-8.29, 9.x, 40.3)"
+      }
+    },
+    "CEP-LINT-STUB-BODY": {
+      "check": "function_policy",
+      "severity": 1,
+      "params": {
+        "mode": "stub_body",
+        "suppress_statuses": [
+          "stub",
+          "partial",
+          "placeholder"
+        ],
+        "suppress_status_field": "CEP:STATUS"
+      },
+      "messages": {
+        "default": "empty function body (CEP&CC 10.5, 19): implement it, use '= default'/'= delete', or declare CEP:STATUS: stub with CEP:OWNER and CEP:TICKET"
+      }
+    },
+    "CEP-LINT-EMPTY-CATCH": {
+      "check": "flat_code_regex",
+      "severity": 1,
+      "params": {
+        "pattern": "\\bcatch\\s*\\(\\s*(?:[^()]|\\([^()]*\\))*\\s*\\)\\s*\\{\\s*\\}"
+      },
+      "messages": {
+        "default": "empty catch handler (CEP&CC 12.2, Law 6): handle the failure or propagate it"
+      }
+    },
+    "CEP-LINT-EMPTY-BRANCH": {
+      "check": "flat_code_regex",
+      "severity": 2,
+      "params": {
+        "pattern": "\\b(?:if|else|for|while|do|switch|try)\\b\\s*(?:(?:constexpr|if)\\b\\s*)?(?:\\(\\s*(?:[^()]|\\([^()]*\\))*\\s*\\)\\s*)?\\{\\s*\\}"
+      },
+      "messages": {
+        "default": "control statement guards an empty block (CEP&CC 14.5): the branch does nothing"
+      }
+    },
+    "CEP-LINT-CONSTANT-RETURN": {
+      "check": "function_policy",
+      "severity": 2,
+      "params": {
+        "mode": "constant_return",
+        "pattern": "^return\\s+(?:true|false|nullptr)\\s*;$"
+      },
+      "messages": {
+        "default": "function body only returns the literal '{match}' (CEP&CC 14.5): compute the result from inputs"
+      }
+    },
+    "CEP-LINT-NAMING-TYPE": {
+      "check": "flat_code_regex",
+      "severity": 2,
+      "params": {
+        "pattern": "\\b(?:struct|class|enum\\s+class|enum\\s+struct|using)\\s+(?!namespace\\b)([A-Za-z_][A-Za-z0-9_]*)",
+        "line_group": 1,
+        "name_pattern": "^[A-Z][A-Za-z0-9]*$"
+      },
+      "messages": {
+        "default": "type '{match}' must be PascalCase with no underscores (CEP&CC 33.11)"
+      }
+    },
+    "CEP-LINT-NAMING-FUNC": {
+      "check": "function_policy",
+      "severity": 2,
+      "params": {
+        "mode": "naming",
+        "name_pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "messages": {
+        "default": "function '{match}' must be snake_case (CEP&CC 33.13)"
+      }
+    },
+    "CEP-LINT-DOC-SYNC": {
+      "check": "doc_rule_coverage",
+      "severity": 1,
+      "params": {
+        "doc_path": "../standard.md",
+        "heading_pattern": "^###\\s+Rule\\s+(CEP-LINT-[A-Z0-9-]+)",
+        "version_pattern": "^Version:\\s*\\*\\*([0-9]+\\.[0-9]+)\\*\\*"
+      },
+      "messages": {
+        "missing_in_doc": "lint rule '{match}' has no '### Rule' entry in the standard document (Law 8: no stale documentation; CEP&CC 34.3)",
+        "missing_in_config": "standard document documents rule '{match}' but the lint config does not define it (Law 8)",
+        "version_mismatch": "standard document version {doc_version} and lint config version {config_version} disagree (Law 8)",
+        "duplicate": "rule '{match}' is documented more than once in the standard document (Law 8)"
+      }
+    }
+  }
+}

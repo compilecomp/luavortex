@@ -1,0 +1,5 @@
+blue	10
+fallback:anything
+fallback:other
+1	fallback:missing
+nil	42

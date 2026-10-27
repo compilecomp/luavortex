@@ -1,0 +1,58 @@
+# CI: build (warnings as errors), the CEP&CC lint gate, and the smoke suite.
+# The lint gate builds the canonical cep_lint tool from axiomzero0/CEP-CC and
+# runs it against luavortex sources with the repository policy.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain and CMake
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 cmake ninja-build
+          echo "CC=gcc-14" >> "$GITHUB_ENV"
+          echo "CXX=g++-14" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build (warnings as errors)
+        run: cmake --build build -j
+
+      - name: Test suite
+        run: ctest --test-dir build --output-on-failure
+
+  cep-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout the CEP&CC standard
+        uses: actions/checkout@v4
+        with:
+          repository: axiomzero0/CEP-CC
+          path: cep-cc
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14
+          echo "CC=gcc-14" >> "$GITHUB_ENV"
+          echo "CXX=g++-14" >> "$GITHUB_ENV"
+
+      - name: Build cep_lint
+        run: cep-cc/tools/cep_lint/build.sh
+
+      - name: Lint luavortex sources (repository policy)
+        run: cep-cc/tools/cep_lint/build/cep_lint --config .cep/cep_lint.json src include tools
+
+      - name: Lint luavortex sources (canonical policy)
+        run: cep-cc/tools/cep_lint/build/cep_lint --config cep-cc/.cep/cep_lint.json src include tools

@@ -1,0 +1,4 @@
+build/
+build-asan/
+cmake-build-*/
+*.ugb
